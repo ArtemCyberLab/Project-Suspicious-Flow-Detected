@@ -60,3 +60,56 @@ If it’s a MiniDump, use tools like pypykatz, mimikatz, or KeePass dump utiliti
 Summary:
 I successfully performed analysis and decoding of network traffic using tshark, xxd, base64, and Python. I resolved package issues, optimized my decoding script for large files, and obtained a decoded dump file ready for deeper forensic analysis.
 
+PART2. FINAL
+1.  Packet Analysis with TShark
+First, I analyzed the provided traffic.pcapng file. I suspected that TCP traffic on a non-standard port 1337 could be interesting.
+
+I used the following tshark command to extract only the useful packet payloads:
+
+tshark -r traffic.pcapng -T fields -Y 'tcp.dstport == 1337 and frame.len > 100' -e data.data > data_hex.txt
+This extracted raw hex data from TCP packets longer than 100 bytes and targeting port 1337.
+
+2. Converting Hex to Binary
+The extracted data was in hex format, so I cleaned it and converted it into a raw binary dump:
+
+cat data_hex.txt | tr -d ':' | xxd -r -p > raw_encrypted.dmp
+This gave me the actual encrypted binary file.
+
+4. Decryption via XOR + Base64
+After inspecting the data, I noticed it was base64-encoded and XOR-encrypted with a single-byte key (likely 'A').
+
+So I wrote a Python script (get_dumpfile.py) to decode and decrypt it:
+
+python
+
+import base64
+
+with open('539.dmp', 'r') as file:
+    encoded_data = file.read()
+
+binary_data = base64.b64decode(encoded_data)
+xor_key = b'A'
+
+decrypted_data = bytearray(len(binary_data))
+for i in range(len(binary_data)):
+    decrypted_data[i] = binary_data[i] ^ xor_key[i % len(xor_key)]
+
+with open('1337.dmp', 'wb') as file:
+    file.write(decrypted_data)
+
+print("Decryption completed. Saved to 1337.dmp")
+After running the script, I successfully generated a decrypted file: 1337.dmp.
+
+4. Analyzing the Memory Dump
+I checked the file type:
+
+file 1337.dmp
+The output confirmed it was a MiniDump crash report:
+
+Mini DuMP crash report, 18 streams...
+I then used strings to search for readable content:
+
+strings 1337.dmp | grep -iE 'flag|pass|key|secret'
+And I found the flag:
+THM{B3_Upd_Your_K33p455}
+
